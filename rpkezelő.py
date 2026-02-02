@@ -62,6 +62,26 @@ async def help_slash(interaction: discord.Interaction):
     await interaction.response.send_message(embed=embed, ephemeral=True)
 
 # =============================
+# GOMBOS VIEW
+# =============================
+class RPJoinView(discord.ui.View):
+    def __init__(self):
+        super().__init__(timeout=None)
+
+    @discord.ui.button(label="Pipa", style=discord.ButtonStyle.success, emoji="🟢")
+    async def join(self, interaction: discord.Interaction, button: discord.ui.Button):
+        await interaction.response.send_message("✅ Jelentkeztél az RP-re!", ephemeral=True)
+
+    @discord.ui.button(label="Késik", style=discord.ButtonStyle.primary, emoji="🟡")
+    async def late(self, interaction: discord.Interaction, button: discord.ui.Button):
+        await interaction.response.send_message("🟡 Jelezted, hogy késel!", ephemeral=True)
+
+    @discord.ui.button(label="Nem jön", style=discord.ButtonStyle.danger, emoji="🔴")
+    async def no(self, interaction: discord.Interaction, button: discord.ui.Button):
+        await interaction.response.send_message("🔴 Jelezted, hogy nem érsz rá!", ephemeral=True)
+
+
+# =============================
 # /test
 # =============================
 @bot.tree.command(name="test", description="Bot működésének tesztelése")
@@ -176,5 +196,6 @@ if __name__ == "__main__":
         except Exception as e:
             print(f"❌ Hiba: {e} – újraindítás 10 mp múlva")
             time.sleep(10)
+
 
 
