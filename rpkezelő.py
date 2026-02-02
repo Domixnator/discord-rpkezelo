@@ -2,223 +2,161 @@ import os
 import discord
 from discord import app_commands
 from discord.ext import commands
-from flask import Flask
-import threading
 import datetime
-import time
 
 # =============================
-# Flask (Render keep-alive)
+# BOT BEÁLLÍTÁSOK
 # =============================
-app = Flask("")
+TOKEN = os.getenv("MTQ2Nzg4NDAxNDY2ODA4NzUxMQ.GA0V99.f2BW21RpshtPMJJY6d45axFCmeZHck84zhj8IA")
 
-@app.route("/")
-def home():
-    return "✅ RP Kezelő bot fut!"
+ALLOWED_ROLES = ["RP Staff"]          # rang neve
+RP_CHANNEL_ID = 1302415423186407509    # RP csatorna ID
+LOG_CHANNEL_ID = 1302415427070201984   # LOG csatorna ID
 
-def run_web():
-    port = int(os.environ.get("PORT", 8080))
-    app.run(host="0.0.0.0", port=port)
-
-# =============================
-# Discord bot
-# =============================
 intents = discord.Intents.default()
 bot = commands.Bot(command_prefix="!", intents=intents)
 
-ALLOWED_ROLES = [RPStaff]          # <<< jogosult rang
-RP_CHANNEL_ID = 1302415423186407509    # <<< RP csatorna
-LOG_CHANNEL_ID = 1302415427070201984   # <<< LOG csatorna
-
+# =============================
+# JOGOSULTSÁG ELLENŐRZÉS
+# =============================
 def has_permission(interaction: discord.Interaction) -> bool:
     return any(role.name in ALLOWED_ROLES for role in interaction.user.roles)
 
 # =============================
-# Events
+# GOMBOS VIEW (1 katt / user)
+# =============================
+class RPJoinView(discord.ui.View):
+    def __init__(self):
+        super().__init__(timeout=None)
+        self.users = set()
+
+    async def check(self, interaction: discord.Interaction):
+        if interaction.user.id in self.users:
+            await interaction.response.send_message(
+                "⚠️ Már jelentkeztél erre az RP-re!",
+                ephemeral=True
+            )
+            return False
+        self.users.add(interaction.user.id)
+        return True
+
+    @discord.ui.button(label="Jövök", style=discord.ButtonStyle.success, emoji="🟢")
+    async def join(self, interaction: discord.Interaction, button: discord.ui.Button):
+        if not await self.check(interaction):
+            return
+        await interaction.response.send_message("✅ Jelentkezés rögzítve!", ephemeral=True)
+
+    @discord.ui.button(label="Kések", style=discord.ButtonStyle.primary, emoji="🟡")
+    async def late(self, interaction: discord.Interaction, button: discord.ui.Button):
+        if not await self.check(interaction):
+            return
+        await interaction.response.send_message("🟡 Késést jeleztél!", ephemeral=True)
+
+    @discord.ui.button(label="Nem jövök", style=discord.ButtonStyle.danger, emoji="🔴")
+    async def no(self, interaction: discord.Interaction, button: discord.ui.Button):
+        if not await self.check(interaction):
+            return
+        await interaction.response.send_message("🔴 Nem jössz az RP-re.", ephemeral=True)
+
+# =============================
+# READY
 # =============================
 @bot.event
 async def on_ready():
-    print(f"✅ Bejelentkezve mint {bot.user}")
     await bot.tree.sync()
+    print(f"✅ Bejelentkezve: {bot.user}")
+
+# =============================
+# /test
+# =============================
+@bot.tree.command(name="test", description="Bot tesztelése")
+async def test(interaction: discord.Interaction):
+    await interaction.response.send_message("✅ A bot működik!", ephemeral=True)
 
 # =============================
 # /help
 # =============================
 @bot.tree.command(name="help", description="RP Kezelő parancsok")
-async def help_slash(interaction: discord.Interaction):
+async def help_cmd(interaction: discord.Interaction):
     if not has_permission(interaction):
-        await interaction.response.send_message("⛔ Nincs jogod!", ephemeral=True)
+        await interaction.response.send_message("⛔ Nincs jogod.", ephemeral=True)
         return
 
     embed = discord.Embed(
-        title="📜 RP Kezelő parancsok",
+        title="📜 RP Kezelő",
         color=discord.Color.dark_red()
     )
-    embed.add_field(name="/rp <idő>", value="RP felhívás (embed)", inline=False)
+    embed.add_field(name="/rp <idő>", value="RP felhívás", inline=False)
     embed.add_field(name="/rpstart", value="RP indítása", inline=False)
     embed.add_field(name="/rpend", value="RP lezárása", inline=False)
-    embed.add_field(name="/test", value="Bot tesztelése", inline=False)
+    embed.add_field(name="/test", value="Teszt parancs", inline=False)
 
     await interaction.response.send_message(embed=embed, ephemeral=True)
 
 # =============================
-# GOMBOS VIEW
-# =============================
-class RPJoinView(discord.ui.View):
-    def __init__(self):
-        super().__init__(timeout=None)
-        self.responded_users = {}  # user_id : státusz
-
-    async def already_responded(self, interaction: discord.Interaction):
-        if interaction.user.id in self.responded_users:
-            await interaction.response.send_message(
-                f"⚠️ Már jelentkeztél erre az RP-re (**{self.responded_users[interaction.user.id]}**).",
-                ephemeral=True
-            )
-            return True
-        return False
-
-    @discord.ui.button(label="Pipa", style=discord.ButtonStyle.success, emoji="🟢")
-    async def join(self, interaction: discord.Interaction, button: discord.ui.Button):
-        if await self.already_responded(interaction):
-            return
-
-        self.responded_users[interaction.user.id] = "Jön"
-        await interaction.response.send_message("✅ Jelentkeztél az RP-re!", ephemeral=True)
-
-    @discord.ui.button(label="Késik", style=discord.ButtonStyle.primary, emoji="🟡")
-    async def late(self, interaction: discord.Interaction, button: discord.ui.Button):
-        if await self.already_responded(interaction):
-            return
-
-        self.responded_users[interaction.user.id] = "Késik"
-        await interaction.response.send_message("🟡 Jelezted, hogy késel!", ephemeral=True)
-
-    @discord.ui.button(label="Nem jön", style=discord.ButtonStyle.danger, emoji="🔴")
-    async def no(self, interaction: discord.Interaction, button: discord.ui.Button):
-        if await self.already_responded(interaction):
-            return
-
-        self.responded_users[interaction.user.id] = "Nem jön"
-        await interaction.response.send_message("🔴 Jelezted, hogy nem érsz rá!", ephemeral=True)
-
-
-# =============================
-# /test
-# =============================
-@bot.tree.command(name="test", description="Bot működésének tesztelése")
-async def test_slash(interaction: discord.Interaction):
-    if not has_permission(interaction):
-        await interaction.response.send_message("⛔ Nincs jogod!", ephemeral=True)
-        return
-
-    await interaction.response.send_message("✅ A bot működik!", ephemeral=True)
-
-# =============================
-# /rp (EMBED)
+# /rp
 # =============================
 @bot.tree.command(name="rp", description="RP felhívás küldése")
 @app_commands.describe(time="Mikor lesz az RP? (pl. 18:00)")
-async def rp_slash(interaction: discord.Interaction, time: str):
+async def rp(interaction: discord.Interaction, time: str):
     if not has_permission(interaction):
-        await interaction.response.send_message("⛔ Nincs jogod!", ephemeral=True)
+        await interaction.response.send_message("⛔ Nincs jogod.", ephemeral=True)
         return
 
     rp_channel = bot.get_channel(RP_CHANNEL_ID)
     log_channel = bot.get_channel(LOG_CHANNEL_ID)
 
-    if not rp_channel:
-        await interaction.response.send_message("❌ RP csatorna nem található!", ephemeral=True)
-        return
-
     embed = discord.Embed(
-        title="🚨 RP Felhívás",
+        title="🚨 RP FELHÍVÁS",
         description=(
             f"A mai napon **{time}**-kor RP lesz!\n\n"
-            "🟢 **Pipa** – Ha jössz\n"
-            "🟡 **Sárga** – Ha késel\n"
-            "🔴 **Piros** – Ha nem érsz rá"
+            "🟢 Jövök\n🟡 Kések\n🔴 Nem jövök"
         ),
         color=discord.Color.dark_red(),
         timestamp=datetime.datetime.utcnow()
     )
     embed.set_footer(text="LCRP Staff Team")
 
-    await rp_channel.send(embed=embed)
-    await interaction.response.send_message("✅ RP felhívás elküldve!", ephemeral=True)
+    await rp_channel.send(embed=embed, view=RPJoinView())
+    await interaction.response.send_message("✅ RP elküldve!", ephemeral=True)
 
     if log_channel:
-        log_embed = discord.Embed(
-            title="📌 RP FELHÍVÁS LOG",
-            color=discord.Color.dark_red()
+        await log_channel.send(
+            f"📌 RP kiírva | Idő: {time} | Ki: {interaction.user.mention}"
         )
-        log_embed.add_field(name="Idő", value=time, inline=True)
-        log_embed.add_field(name="Ki adta ki", value=interaction.user.mention, inline=True)
-        log_embed.add_field(name="Csatorna", value=rp_channel.mention, inline=False)
-        log_embed.set_footer(text=f"User ID: {interaction.user.id}")
-        log_channel.send(embed=log_embed)
 
 # =============================
 # /rpstart
 # =============================
 @bot.tree.command(name="rpstart", description="RP indítása")
-async def rpstart_slash(interaction: discord.Interaction):
+async def rpstart(interaction: discord.Interaction):
     if not has_permission(interaction):
-        await interaction.response.send_message("⛔ Nincs jogod!", ephemeral=True)
+        await interaction.response.send_message("⛔ Nincs jogod.", ephemeral=True)
         return
 
     rp_channel = bot.get_channel(RP_CHANNEL_ID)
-    log_channel = bot.get_channel(LOG_CHANNEL_ID)
-
-    await rp_channel.send("🚓 **RP START** – mindenkinek jó játékot!\n**LCRP Staff Team**")
+    await rp_channel.send("🚓 **RP START** – jó játékot!\n**LCRP Staff Team**")
     await interaction.response.send_message("✅ RP START elküldve!", ephemeral=True)
-
-    if log_channel:
-        log_channel.send(
-            f"▶️ **RP START** | Ki: {interaction.user.mention} | Csatorna: {rp_channel.mention}"
-        )
 
 # =============================
 # /rpend
 # =============================
 @bot.tree.command(name="rpend", description="RP lezárása")
-async def rpend_slash(interaction: discord.Interaction):
+async def rpend(interaction: discord.Interaction):
     if not has_permission(interaction):
-        await interaction.response.send_message("⛔ Nincs jogod!", ephemeral=True)
+        await interaction.response.send_message("⛔ Nincs jogod.", ephemeral=True)
         return
 
     rp_channel = bot.get_channel(RP_CHANNEL_ID)
-    log_channel = bot.get_channel(LOG_CHANNEL_ID)
-
     await rp_channel.send(
-        "🏁 **RP END** – köszönjük mindenkinek a részvételt,\n"
-        "reméljük mindenki jól érezte magát!\n"
-        "**LCRP Staff Team**"
+        "🏁 **RP END** – köszönjük a részvételt!\n**LCRP Staff Team**"
     )
     await interaction.response.send_message("✅ RP END elküldve!", ephemeral=True)
 
-    if log_channel:
-        log_channel.send(
-            f"⏹️ **RP END** | Ki: {interaction.user.mention} | Csatorna: {rp_channel.mention}"
-        )
-
 # =============================
-# Indítás (Render)
+# INDÍTÁS
 # =============================
-if __name__ == "__main__":
-    threading.Thread(target=run_web, daemon=True).start()
-    token = os.getenv("MTQ2Nzg4NDAxNDY2ODA4NzUxMQ.GA0V99.f2BW21RpshtPMJJY6d45axFCmeZHck84zhj8IA")
+if not TOKEN:
+    raise RuntimeError("❌ DISCORD_BOT_TOKEN nincs beállítva!")
 
-    if not token:
-        raise RuntimeError("❌ DISCORD_BOT_TOKEN hiányzik!")
-
-    while True:
-        try:
-            bot.run(token)
-        except Exception as e:
-            print(f"❌ Hiba: {e} – újraindítás 10 mp múlva")
-            time.sleep(10)
-
-
-
-
+bot.run(TOKEN)
