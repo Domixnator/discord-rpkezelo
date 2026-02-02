@@ -67,17 +67,39 @@ async def help_slash(interaction: discord.Interaction):
 class RPJoinView(discord.ui.View):
     def __init__(self):
         super().__init__(timeout=None)
+        self.responded_users = {}  # user_id : státusz
+
+    async def already_responded(self, interaction: discord.Interaction):
+        if interaction.user.id in self.responded_users:
+            await interaction.response.send_message(
+                f"⚠️ Már jelentkeztél erre az RP-re (**{self.responded_users[interaction.user.id]}**).",
+                ephemeral=True
+            )
+            return True
+        return False
 
     @discord.ui.button(label="Pipa", style=discord.ButtonStyle.success, emoji="🟢")
     async def join(self, interaction: discord.Interaction, button: discord.ui.Button):
+        if await self.already_responded(interaction):
+            return
+
+        self.responded_users[interaction.user.id] = "Jön"
         await interaction.response.send_message("✅ Jelentkeztél az RP-re!", ephemeral=True)
 
     @discord.ui.button(label="Késik", style=discord.ButtonStyle.primary, emoji="🟡")
     async def late(self, interaction: discord.Interaction, button: discord.ui.Button):
+        if await self.already_responded(interaction):
+            return
+
+        self.responded_users[interaction.user.id] = "Késik"
         await interaction.response.send_message("🟡 Jelezted, hogy késel!", ephemeral=True)
 
     @discord.ui.button(label="Nem jön", style=discord.ButtonStyle.danger, emoji="🔴")
     async def no(self, interaction: discord.Interaction, button: discord.ui.Button):
+        if await self.already_responded(interaction):
+            return
+
+        self.responded_users[interaction.user.id] = "Nem jön"
         await interaction.response.send_message("🔴 Jelezted, hogy nem érsz rá!", ephemeral=True)
 
 
@@ -196,6 +218,7 @@ if __name__ == "__main__":
         except Exception as e:
             print(f"❌ Hiba: {e} – újraindítás 10 mp múlva")
             time.sleep(10)
+
 
 
 
