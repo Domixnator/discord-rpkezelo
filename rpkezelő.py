@@ -165,7 +165,7 @@ async def rpend_slash(interaction: discord.Interaction):
 # =============================
 if __name__ == "__main__":
     threading.Thread(target=run_web, daemon=True).start()
-    token = os.getenv("DISCORD_BOT_TOKEN")
+    token = os.getenv("MTQ2Nzg4NDAxNDY2ODA4NzUxMQ.Ge4NRI.BlBe0Yz-B3DPg4xYdwjzLIHcvmJKgKYkvRYFMA")
 
     if not token:
         raise RuntimeError("❌ DISCORD_BOT_TOKEN hiányzik!")
@@ -176,3 +176,4 @@ if __name__ == "__main__":
         except Exception as e:
             print(f"❌ Hiba: {e} – újraindítás 10 mp múlva")
             time.sleep(10)
+
